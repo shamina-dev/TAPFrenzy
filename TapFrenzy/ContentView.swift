@@ -84,7 +84,9 @@ struct ContentView: View {
                                 handleTap(in: geometry.size)
                             }) {
                                 Text(isHazard ? "DON'T!" : "TAP")
-                                    .font(.system(size: isHazard ? 32 : 40, weight: .heavy))
+                                    .font(.system(size: isHazard ? 20 : 38, weight: .heavy))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.6)
                                     .foregroundColor(.white)
                                     .frame(width: buttonSize, height: buttonSize)
                                     .background(isHazard ? Color.red : Color.blue)
@@ -116,8 +118,14 @@ struct ContentView: View {
                                 .font(.system(size: 36, weight: .heavy))
                                 .foregroundColor(.red)
 
-                            Text("Final Score: \(score)")
-                                .font(.system(size: 50, weight: .heavy))
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text("Final Score:")
+                                    .font(.system(size: 30, weight: .bold))
+                                Text("\(score)")
+                                    .font(.system(size: 36, weight: .heavy))
+                            }
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
 
                             Text("Best: \(highScore)")
                                 .font(.system(size: 24, weight: .bold))
