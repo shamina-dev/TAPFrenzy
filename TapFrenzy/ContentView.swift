@@ -17,7 +17,12 @@ enum GamePhase {
 }
 
 struct ContentView: View {
+    // MARK: - Persisted High Score
+    // Persists high score across launches using @AppStorage
+    @AppStorage("highScore") private var highScore: Int = 0
+
     // MARK: - State Properties
+    // Core state loop: phase, score, countdown timer
     @State private var phase: GamePhase = .idle
     @State private var score: Int = 0
     @State private var timeRemaining: Int = 10
@@ -26,6 +31,7 @@ struct ContentView: View {
     // 1-second countdown timer publisher
     @State private var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    // MARK: - Body
     var body: some View {
         VStack(spacing: 24) {
             headerView
@@ -41,6 +47,7 @@ struct ContentView: View {
             Spacer()
         }
         .padding()
+        .onAppear(perform: migrateLegacyHighScoreIfNeeded)
         .onReceive(timer) { _ in
             handleTimerTick()
         }
@@ -48,6 +55,7 @@ struct ContentView: View {
 
     // MARK: - Subviews
 
+    /// App header displaying title and persisted high score
     private var headerView: some View {
         VStack(spacing: 8) {
             Text("Tap Frenzy")
@@ -56,7 +64,7 @@ struct ContentView: View {
             HStack(spacing: 6) {
                 Image(systemName: "trophy.fill")
                     .foregroundStyle(.yellow)
-                Text("High Score: 0")
+                Text("High Score: \(highScore)")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
@@ -65,6 +73,7 @@ struct ContentView: View {
         .padding(.top, 30)
     }
 
+    /// Status display handled cleanly for each phase: idle → playing → over
     @ViewBuilder
     private var statusSection: some View {
         switch phase {
@@ -77,18 +86,12 @@ struct ContentView: View {
                 .transition(.opacity)
 
         case .over:
-            VStack(spacing: 12) {
-                Text("Time's Up!")
-                    .font(.system(size: 34, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.red)
-
-                Text("Final Score: \(score)")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-            }
-            .transition(.opacity)
+            gameOverDisplay
+                .transition(.opacity)
         }
     }
 
+    /// Shared stats layout for idle and playing phases
     private func statsDisplay(time: Int, currentScore: Int, isUrgent: Bool) -> some View {
         HStack(spacing: 50) {
             VStack(spacing: 4) {
@@ -113,6 +116,31 @@ struct ContentView: View {
         }
     }
 
+    /// Results summary shown when the game is over
+    private var gameOverDisplay: some View {
+        VStack(spacing: 12) {
+            Text("Time's Up!")
+                .font(.system(size: 34, weight: .heavy, design: .rounded))
+                .foregroundStyle(.red)
+
+            VStack(spacing: 6) {
+                Text("Final Score: \(score)")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                Text("High Score: \(highScore)")
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                if score == highScore && score > 0 {
+                    Text("🎉 New High Score!")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                        .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    /// One big circular TAP button in the middle of the screen
     private var circularTapButton: some View {
         Button(action: handleButtonTap) {
             ZStack {
@@ -128,6 +156,7 @@ struct ContentView: View {
         .buttonStyle(TapButtonStyle())
     }
 
+    /// Button text and icon corresponding to the current phase
     @ViewBuilder
     private var buttonLabel: some View {
         switch phase {
@@ -154,6 +183,7 @@ struct ContentView: View {
         }
     }
 
+    /// Button background gradient based on phase
     private var buttonGradient: LinearGradient {
         switch phase {
         case .idle:
@@ -177,6 +207,7 @@ struct ContentView: View {
         }
     }
 
+    /// Button drop shadow color based on phase
     private var buttonShadowColor: Color {
         switch phase {
         case .idle:
@@ -190,6 +221,7 @@ struct ContentView: View {
 
     // MARK: - Game Loop Logic
 
+    /// Primary tap handler navigating phases: idle → playing → over
     private func handleButtonTap() {
         switch phase {
         case .idle:
@@ -204,22 +236,33 @@ struct ContentView: View {
         }
     }
 
+    /// Begins a fresh 10-second game session
     private func startGame() {
         score = 0
         timeRemaining = 10
         phase = .playing
+        // Reset timer publisher so the first tick starts exactly 1 second from now
         timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     }
 
+    /// Concludes the game session and persists high score
     private func endGame() {
         timer.upstream.connect().cancel()
         phase = .over
         canRestart = false
+
+        // Update high score across launches via @AppStorage
+        if score > highScore {
+            highScore = score
+        }
+
+        // Brief cooldown to avoid accidental tap carryover from frenzied tapping
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             canRestart = true
         }
     }
 
+    /// Ticks the countdown down each second while playing
     private func handleTimerTick() {
         guard phase == .playing else { return }
 
@@ -228,6 +271,14 @@ struct ContentView: View {
         } else {
             timeRemaining = 0
             endGame()
+        }
+    }
+
+    /// Checks if a score was previously saved under "bestScore" and migrates it to "highScore"
+    private func migrateLegacyHighScoreIfNeeded() {
+        let legacyBest = UserDefaults.standard.integer(forKey: "bestScore")
+        if legacyBest > highScore {
+            highScore = legacyBest
         }
     }
 }
@@ -241,6 +292,7 @@ struct TapButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - Previews
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
