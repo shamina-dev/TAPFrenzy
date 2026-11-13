@@ -8,8 +8,6 @@
 import SwiftUI
 import Combine
 
-// MARK: - Game Phase Definition
-// Represents the core lifecycle: idle → playing → over
 enum GamePhase {
     case idle
     case playing
@@ -17,269 +15,107 @@ enum GamePhase {
 }
 
 struct ContentView: View {
-    // MARK: - Persisted High Score
-    // Persists high score across launches using @AppStorage
-    @AppStorage("highScore") private var highScore: Int = 0
-
-    // MARK: - State Properties
-    // Core state loop: phase, score, countdown timer
+    @AppStorage("highScore") private var highScore = 0
     @State private var phase: GamePhase = .idle
-    @State private var score: Int = 0
-    @State private var timeRemaining: Int = 10
-    @State private var canRestart: Bool = false
+    @State private var score = 0
+    @State private var timeRemaining = 10
 
-    // 1-second countdown timer publisher
     @State private var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    // MARK: - Body
     var body: some View {
-        VStack(spacing: 24) {
-            headerView
+        VStack {
+            switch phase {
+            case .idle, .playing:
+                VStack(spacing: 40) {
+                    // Score label with chunky font
+                    Text("\(score)")
+                        .font(.system(size: 80, weight: .heavy))
 
-            Spacer()
+                    Spacer()
 
-            statusSection
+                    // Big circular TAP Button in the middle
+                    Button(action: handleTap) {
+                        Text("TAP")
+                            .font(.system(size: 40, weight: .heavy))
+                            .foregroundColor(.white)
+                            .frame(width: 200, height: 200)
+                            .background(Color.blue)
+                            .clipShape(Circle())
+                            .shadow(color: Color.blue.opacity(0.4), radius: 10, x: 0, y: 5)
+                    }
+                    .buttonStyle(TapButtonStyle())
 
-            Spacer()
+                    Spacer()
 
-            circularTapButton
+                    // Timer label
+                    Text("Time: \(timeRemaining)")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundColor(timeRemaining <= 3 && phase == .playing ? .red : .primary)
+                }
+                .padding(.vertical, 40)
 
-            Spacer()
+            case .over:
+                VStack(spacing: 24) {
+                    Text("Time's Up!")
+                        .font(.system(size: 36, weight: .heavy))
+                        .foregroundColor(.red)
+
+                    Text("Final Score: \(score)")
+                        .font(.system(size: 50, weight: .heavy))
+
+                    Text("Best: \(highScore)")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.secondary)
+
+                    if score == highScore && score > 0 {
+                        Text("🎉 New High Score!")
+                            .font(.headline)
+                            .foregroundColor(.orange)
+                    }
+
+                    Button("Play Again") {
+                        playAgain()
+                    }
+                    .font(.title2.bold())
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 16)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .clipShape(Capsule())
+                    .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .padding(.top, 20)
+                }
+                .padding()
+            }
         }
         .padding()
-        .onAppear(perform: migrateLegacyHighScoreIfNeeded)
         .onReceive(timer) { _ in
-            handleTimerTick()
-        }
-    }
+            guard phase == .playing else { return }
 
-    // MARK: - Subviews
-
-    /// App header displaying title and persisted high score
-    private var headerView: some View {
-        VStack(spacing: 8) {
-            Text("Tap Frenzy")
-                .font(.system(size: 36, weight: .black, design: .rounded))
-
-            HStack(spacing: 6) {
-                Image(systemName: "trophy.fill")
-                    .foregroundStyle(.yellow)
-                Text("High Score: \(highScore)")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.top, 30)
-    }
-
-    /// Status display handled cleanly for each phase: idle → playing → over
-    @ViewBuilder
-    private var statusSection: some View {
-        switch phase {
-        case .idle:
-            statsDisplay(time: 10, currentScore: 0, isUrgent: false)
-                .transition(.opacity)
-
-        case .playing:
-            statsDisplay(time: timeRemaining, currentScore: score, isUrgent: timeRemaining <= 3)
-                .transition(.opacity)
-
-        case .over:
-            gameOverDisplay
-                .transition(.opacity)
-        }
-    }
-
-    /// Shared stats layout for idle and playing phases
-    private func statsDisplay(time: Int, currentScore: Int, isUrgent: Bool) -> some View {
-        HStack(spacing: 50) {
-            VStack(spacing: 4) {
-                Text("TIME")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-                Text("\(time)s")
-                    .font(.system(size: 38, weight: .heavy, design: .rounded))
-                    .foregroundStyle(isUrgent ? .red : .primary)
-            }
-
-            VStack(spacing: 4) {
-                Text("SCORE")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-                Text("\(currentScore)")
-                    .font(.system(size: 38, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
-        }
-    }
-
-    /// Results summary shown when the game is over
-    private var gameOverDisplay: some View {
-        VStack(spacing: 12) {
-            Text("Time's Up!")
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
-                .foregroundStyle(.red)
-
-            VStack(spacing: 6) {
-                Text("Final Score: \(score)")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                Text("High Score: \(highScore)")
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                if score == highScore && score > 0 {
-                    Text("🎉 New High Score!")
-                        .font(.headline)
-                        .foregroundStyle(.orange)
-                        .padding(.top, 4)
+            if timeRemaining > 0 {
+                timeRemaining -= 1
+                if timeRemaining == 0 {
+                    phase = .over
+                    if score > highScore {
+                        highScore = score
+                    }
                 }
             }
         }
     }
 
-    /// One big circular TAP button in the middle of the screen
-    private var circularTapButton: some View {
-        Button(action: handleButtonTap) {
-            ZStack {
-                Circle()
-                    .fill(buttonGradient)
-                    .frame(width: 220, height: 220)
-                    .shadow(color: buttonShadowColor, radius: 16, x: 0, y: 8)
-
-                buttonLabel
-                    .foregroundStyle(.white)
-            }
+    private func handleTap() {
+        if phase == .idle {
+            phase = .playing
+            timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
         }
-        .buttonStyle(TapButtonStyle())
+        score += 1
     }
 
-    /// Button text and icon corresponding to the current phase
-    @ViewBuilder
-    private var buttonLabel: some View {
-        switch phase {
-        case .idle:
-            VStack(spacing: 4) {
-                Text("START")
-                    .font(.system(size: 38, weight: .black, design: .rounded))
-                Text("Tap to play")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .opacity(0.85)
-            }
-
-        case .playing:
-            Text("TAP!")
-                .font(.system(size: 48, weight: .black, design: .rounded))
-
-        case .over:
-            VStack(spacing: 4) {
-                Text("TRY")
-                    .font(.system(size: 28, weight: .black, design: .rounded))
-                Text("AGAIN")
-                    .font(.system(size: 22, weight: .black, design: .rounded))
-            }
-        }
-    }
-
-    /// Button background gradient based on phase
-    private var buttonGradient: LinearGradient {
-        switch phase {
-        case .idle:
-            return LinearGradient(
-                colors: [Color.blue, Color.purple],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .playing:
-            return LinearGradient(
-                colors: [Color.orange, Color.pink],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .over:
-            return LinearGradient(
-                colors: [Color.green, Color.teal],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-    }
-
-    /// Button drop shadow color based on phase
-    private var buttonShadowColor: Color {
-        switch phase {
-        case .idle:
-            return Color.purple.opacity(0.4)
-        case .playing:
-            return Color.orange.opacity(0.45)
-        case .over:
-            return Color.green.opacity(0.4)
-        }
-    }
-
-    // MARK: - Game Loop Logic
-
-    /// Primary tap handler navigating phases: idle → playing → over
-    private func handleButtonTap() {
-        switch phase {
-        case .idle:
-            startGame()
-
-        case .playing:
-            score += 1
-
-        case .over:
-            guard canRestart else { return }
-            startGame()
-        }
-    }
-
-    /// Begins a fresh 10-second game session
-    private func startGame() {
+    private func playAgain() {
         score = 0
         timeRemaining = 10
-        phase = .playing
-        // Reset timer publisher so the first tick starts exactly 1 second from now
-        timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    }
-
-    /// Concludes the game session and persists high score
-    private func endGame() {
-        timer.upstream.connect().cancel()
-        phase = .over
-        canRestart = false
-
-        // Update high score across launches via @AppStorage
-        if score > highScore {
-            highScore = score
-        }
-
-        // Brief cooldown to avoid accidental tap carryover from frenzied tapping
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            canRestart = true
-        }
-    }
-
-    /// Ticks the countdown down each second while playing
-    private func handleTimerTick() {
-        guard phase == .playing else { return }
-
-        if timeRemaining > 1 {
-            timeRemaining -= 1
-        } else {
-            timeRemaining = 0
-            endGame()
-        }
-    }
-
-    /// Checks if a score was previously saved under "bestScore" and migrates it to "highScore"
-    private func migrateLegacyHighScoreIfNeeded() {
-        let legacyBest = UserDefaults.standard.integer(forKey: "bestScore")
-        if legacyBest > highScore {
-            highScore = legacyBest
-        }
+        phase = .idle
     }
 }
 
