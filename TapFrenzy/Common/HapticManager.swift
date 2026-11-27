@@ -1,22 +1,22 @@
 import SwiftUI
 import UIKit
 
-/// Centralized manager for rich tactile feedback in TapFrenzy
+/// Centralized manager for rich tactile feedback across game modes
 final class HapticManager {
     static let shared = HapticManager()
-    
+
     @AppStorage("hapticsEnabled") var isEnabled: Bool = true
-    
+
     private let lightImpact = UIImpactFeedbackGenerator(style: .light)
     private let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
     private let heavyImpact = UIImpactFeedbackGenerator(style: .heavy)
     private let rigidImpact = UIImpactFeedbackGenerator(style: .rigid)
     private let notification = UINotificationFeedbackGenerator()
-    
+
     private init() {
         prepareGenerators()
     }
-    
+
     func prepareGenerators() {
         guard isEnabled else { return }
         lightImpact.prepare()
@@ -25,7 +25,7 @@ final class HapticManager {
         rigidImpact.prepare()
         notification.prepare()
     }
-    
+
     /// Normal tap feedback with escalation based on combo level
     func tap(combo: Int = 1) {
         guard isEnabled else { return }
@@ -40,25 +40,25 @@ final class HapticManager {
             heavyImpact.impactOccurred(intensity: 1.0)
         }
     }
-    
+
     /// Gold star bonus collected (+5)
     func bonusCollected() {
         guard isEnabled else { return }
         notification.notificationOccurred(.success)
     }
-    
-    /// Red hazard penalty triggered (-2)
+
+    /// Penalty feedback
     func hazardPenalty() {
         guard isEnabled else { return }
         notification.notificationOccurred(.error)
     }
-    
+
     /// Game over warning
     func gameOver() {
         guard isEnabled else { return }
         notification.notificationOccurred(.warning)
     }
-    
+
     /// Celebratory new personal best
     func newRecord() {
         guard isEnabled else { return }
