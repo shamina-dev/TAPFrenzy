@@ -5,16 +5,16 @@ struct ContentView: View {
     // AppStorage & Core State
     @AppStorage("highScore") private var highScore = 0
     @AppStorage("hapticsEnabled") private var isHapticsEnabled = true
-    
+
     @State private var phase: GamePhase = .idle
     @State private var score = 0
     @State private var timeRemaining = 10
-    
+
     // Statistics for Game Over breakdown
     @State private var totalTaps = 0
     @State private var maxCombo = 1
     @State private var isNewRecord = false
-    
+
     // Floating score animation items
     @State private var floatingScores: [FloatingScoreItem] = []
 
@@ -95,7 +95,7 @@ struct ContentView: View {
                                 handleTap(in: geometry.size)
                             }
                         )
-                        
+
                         FloatingScoreLayer(items: floatingScores)
                     }
                     .frame(height: 240)
@@ -154,7 +154,7 @@ struct ContentView: View {
                         totalTaps: totalTaps,
                         onPlayAgain: playAgain
                     )
-                    
+
                     if isNewRecord {
                         ConfettiView()
                     }
@@ -202,7 +202,7 @@ struct ContentView: View {
             comboMultiplier = 1
             HapticManager.shared.hazardPenalty()
             spawnFloatingScore(text: "-2", color: .red, isPositive: false)
-            
+
             withAnimation(.default) {
                 hazardShake = true
             }
@@ -214,13 +214,13 @@ struct ContentView: View {
 
         // Fast-tap combo calculation
         registerTapCombo()
-        
+
         // Haptic feedback matching combo intensity
         HapticManager.shared.tap(combo: comboMultiplier)
-        
+
         let earnedPoints = comboMultiplier
         score += earnedPoints
-        
+
         // Spawn floating score feedback
         let popupText = comboMultiplier > 1 ? "+\(earnedPoints) (x\(comboMultiplier))" : "+\(earnedPoints)"
         let popupColor: Color = {
@@ -270,7 +270,7 @@ struct ContentView: View {
 
     private func spawnFloatingScore(text: String, color: Color, isPositive: Bool) {
         let randomXOffset = CGFloat.random(in: -35...35)
-        var item = FloatingScoreItem(
+        let item = FloatingScoreItem(
             text: text,
             color: color,
             offset: CGSize(width: randomXOffset, height: 10),
@@ -279,7 +279,7 @@ struct ContentView: View {
             isPositive: isPositive
         )
         floatingScores.append(item)
-        
+
         // Animate floating up and fading away
         withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
             if let index = floatingScores.firstIndex(where: { $0.id == item.id }) {
@@ -287,7 +287,7 @@ struct ContentView: View {
                 floatingScores[index].offset.height = -45
             }
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             withAnimation(.easeOut(duration: 0.35)) {
                 if let index = floatingScores.firstIndex(where: { $0.id == item.id }) {
@@ -296,7 +296,7 @@ struct ContentView: View {
                 }
             }
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
             floatingScores.removeAll(where: { $0.id == item.id })
         }
@@ -334,7 +334,7 @@ struct ContentView: View {
             let minY: CGFloat = 130
             let maxY: CGFloat = max(minY + 20, size.height - 130)
 
-            var randomX = CGFloat.random(in: minX...maxX)
+            let randomX = CGFloat.random(in: minX...maxX)
             var randomY = CGFloat.random(in: minY...maxY)
 
             // Ensure bonus button does not directly overlap the center button
@@ -388,15 +388,6 @@ struct ContentView: View {
         isHazard = false
         showBonusButton = false
         floatingScores.removeAll()
-    }
-}
-
-// MARK: - Button Style for Tactile Tap Feedback
-struct TapButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
-            .animation(.easeInOut(duration: 0.08), value: configuration.isPressed)
     }
 }
 

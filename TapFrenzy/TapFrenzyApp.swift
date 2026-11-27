@@ -6,7 +6,7 @@ import SwiftUI
 struct TapFrenzyApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            HomeView()
         }
     }
 }
