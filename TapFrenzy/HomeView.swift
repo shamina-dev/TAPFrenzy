@@ -3,7 +3,10 @@ import SwiftUI
 struct HomeView: View {
     @AppStorage("highScore") private var tapFrenzyHighScore = 0
     @AppStorage("lightItUpHighScore") private var lightItUpHighScore = 0
+    @AppStorage("lightItUpRoundLength") private var lightItUpRoundLength = 60
     @AppStorage("hapticsEnabled") private var isHapticsEnabled = true
+
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -11,6 +14,32 @@ struct HomeView: View {
                 GameBackgroundView(isHazard: false)
 
                 VStack(spacing: 28) {
+                    // Top Settings Button
+                    HStack {
+                        Spacer()
+
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 42, height: 42)
+                                .background(
+                                    Circle()
+                                        .fill(Color(red: 0.14, green: 0.16, blue: 0.30))
+                                        .overlay(
+                                            Circle()
+                                                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1.2)
+                                        )
+                                )
+                        }
+                        .buttonStyle(TapButtonStyle())
+                        .accessibilityLabel("Settings")
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+
                     Spacer()
 
                     // App Title
@@ -53,7 +82,7 @@ struct HomeView: View {
                         } label: {
                             GameModeCard(
                                 title: "Light It Up",
-                                subtitle: "60s reaction grid with 4 speed levels",
+                                subtitle: "\(lightItUpRoundLength)s reaction grid with 4 speed levels",
                                 bestScore: lightItUpHighScore,
                                 gradientColors: [
                                     Color(red: 1.0, green: 0.58, blue: 0.05),
@@ -70,6 +99,9 @@ struct HomeView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showSettings) {
+                SettingsSheetView()
+            }
             .onAppear {
                 HapticManager.shared.isEnabled = isHapticsEnabled
                 HapticManager.shared.prepareGenerators()
@@ -130,6 +162,109 @@ private struct GameModeCard: View {
                 )
         )
         .shadow(color: accentColor.opacity(0.4), radius: 14, x: 0, y: 8)
+    }
+}
+
+// MARK: - Settings Sheet
+private struct SettingsSheetView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("lightItUpRoundLength") private var roundLength = 60
+    @AppStorage("hapticsEnabled") private var isHapticsEnabled = true
+
+    private let roundOptions = [30, 60, 90]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GameBackgroundView(isHazard: false)
+
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("LIGHT IT UP ROUND LENGTH")
+                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                            .tracking(1.2)
+
+                        HStack(spacing: 12) {
+                            ForEach(roundOptions, id: \.self) { seconds in
+                                let isSelected = roundLength == seconds
+                                Button {
+                                    roundLength = seconds
+                                    HapticManager.shared.tap(combo: 1)
+                                } label: {
+                                    Text("\(seconds)s")
+                                        .font(.system(size: 18, weight: .black, design: .rounded))
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 14)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .fill(
+                                                    isSelected
+                                                        ? LinearGradient(
+                                                            colors: [Color.orange, Color.pink],
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        )
+                                                        : LinearGradient(
+                                                            colors: [Color(red: 0.14, green: 0.15, blue: 0.28), Color(red: 0.11, green: 0.12, blue: 0.24)],
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        )
+                                                )
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 16)
+                                                        .strokeBorder(
+                                                            isSelected ? Color.yellow : Color(red: 0.26, green: 0.28, blue: 0.45),
+                                                            lineWidth: isSelected ? 2 : 1
+                                                        )
+                                                )
+                                        )
+                                }
+                                .buttonStyle(TapButtonStyle())
+                            }
+                        }
+                    }
+
+                    Toggle(isOn: $isHapticsEnabled) {
+                        Text("Haptic Feedback")
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                    .tint(.cyan)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(red: 0.14, green: 0.15, blue: 0.28))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .strokeBorder(Color(red: 0.26, green: 0.28, blue: 0.45), lineWidth: 1)
+                            )
+                    )
+                    .onChange(of: isHapticsEnabled) { _, newValue in
+                        HapticManager.shared.isEnabled = newValue
+                        if newValue {
+                            HapticManager.shared.tap(combo: 1)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(22)
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium])
     }
 }
 

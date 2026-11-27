@@ -4,6 +4,7 @@ import Combine
 struct LightItUpView: View {
     // MARK: - Persisted Settings & High Score
     @AppStorage("lightItUpHighScore") private var highScore = 0
+    @AppStorage("lightItUpRoundLength") private var roundDuration = 60
     @AppStorage("hapticsEnabled") private var isHapticsEnabled = true
 
     // MARK: - Game State
@@ -12,23 +13,27 @@ struct LightItUpView: View {
     @State private var currentLevel: Level = .L1
     @State private var score: Int = 0
     @State private var timeRemaining: Int = 60
+    @State private var lives: Int = 3
 
     // Round Statistics
     @State private var hits: Int = 0
-    @State private var misses: Int = 0
+    @State private var wrongTaps: Int = 0
     @State private var streak: Int = 0
     @State private var isNewRecord: Bool = false
+    @State private var endedOutOfLives: Bool = false
 
     // Visual Feedback & Tokens
     @State private var cardFlashes: [Int: CardFlash] = [:]
     @State private var litTokens: [Int: UUID] = [:]
     @State private var floatingScores: [FloatingScoreItem] = []
+    @State private var levelUpBannerText: String? = nil
+    @State private var levelUpDismissWorkItem: DispatchWorkItem? = nil
 
     // MARK: - Timers
     @State private var roundTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var litTimer = Timer.publish(every: Level.L1.litWindow, on: .main, in: .common).autoconnect()
 
-    private let roundDuration = 60
+    private let maxLives = 3
 
     private var gridColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 14), count: currentLevel.columnCount)
@@ -64,19 +69,32 @@ struct LightItUpView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                // Level & Score Row
+                // Level, Lives & Score Row
                 HStack(alignment: .center, spacing: 12) {
-                    HStack(spacing: 8) {
-                        Text(currentLevel.badgeTitle)
-                            .font(.system(size: 12, weight: .black, design: .rounded))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(currentLevel.accentColor))
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(currentLevel.badgeTitle)
+                                .font(.system(size: 12, weight: .black, design: .rounded))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(currentLevel.accentColor))
 
-                        Text("\(String(format: "%.1fs", currentLevel.litWindow))")
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.7))
+                            Text("\(String(format: "%.1fs", currentLevel.litWindow))")
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.75))
+                        }
+
+                        // 3 Lives Indicator
+                        HStack(spacing: 6) {
+                            ForEach(0..<maxLives, id: \.self) { index in
+                                Image(systemName: index < lives ? "heart.fill" : "heart")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(index < lives ? .red : .white.opacity(0.25))
+                                    .scaleEffect(index < lives ? 1.0 : 0.85)
+                                    .animation(.spring(response: 0.25, dampingFraction: 0.6), value: lives)
+                            }
+                        }
                     }
 
                     Spacer()
@@ -91,7 +109,7 @@ struct LightItUpView: View {
                             .font(.system(size: 38, weight: .black, design: .rounded))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [.white, .yellow],
+                                    colors: [.white, currentLevel.accentColor],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -109,6 +127,7 @@ struct LightItUpView: View {
                         ForEach(cards) { card in
                             LightUpCardView(
                                 card: card,
+                                level: currentLevel,
                                 flash: cardFlashes[card.id],
                                 height: cardHeight,
                                 isInteractive: phase == .playing,
@@ -151,6 +170,32 @@ struct LightItUpView: View {
             }
             .padding(.top, 4)
 
+            // Brief Level-Up Flash Overlay
+            if let bannerText = levelUpBannerText {
+                Text(bannerText)
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 14)
+                    .background(
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: currentLevel.litGradientColors,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .shadow(color: currentLevel.accentColor.opacity(0.85), radius: 22, x: 0, y: 6)
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.45), lineWidth: 2)
+                    )
+                    .transition(.scale(scale: 0.75).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+
             // Game Over Overlay
             if phase == .over {
                 LightItUpGameOverModalView(
@@ -158,7 +203,9 @@ struct LightItUpView: View {
                     highScore: highScore,
                     isNewRecord: isNewRecord,
                     hits: hits,
-                    misses: misses,
+                    wrongTaps: wrongTaps,
+                    livesRemaining: lives,
+                    endedOutOfLives: endedOutOfLives,
                     levelReached: currentLevel,
                     onPlayAgain: resetToIdle
                 )
@@ -173,6 +220,14 @@ struct LightItUpView: View {
         .onAppear {
             HapticManager.shared.isEnabled = isHapticsEnabled
             HapticManager.shared.prepareGenerators()
+            if phase == .idle {
+                timeRemaining = roundDuration
+            }
+        }
+        .onChange(of: roundDuration) { _, newValue in
+            if phase == .idle {
+                timeRemaining = newValue
+            }
         }
         .onDisappear {
             stopActiveRound()
@@ -183,7 +238,7 @@ struct LightItUpView: View {
             if timeRemaining > 0 {
                 timeRemaining -= 1
                 let elapsed = roundDuration - timeRemaining
-                let nextLevel = Level.forElapsed(elapsed)
+                let nextLevel = Level.forElapsed(elapsed, totalDuration: roundDuration)
 
                 if nextLevel != currentLevel && timeRemaining > 0 {
                     switchLevel(to: nextLevel)
@@ -194,7 +249,7 @@ struct LightItUpView: View {
                 }
 
                 if timeRemaining == 0 {
-                    endGame()
+                    endGame(outOfLives: false)
                 }
             }
         }
@@ -209,15 +264,19 @@ struct LightItUpView: View {
     private func startGame() {
         score = 0
         hits = 0
-        misses = 0
+        wrongTaps = 0
         streak = 0
+        lives = maxLives
         timeRemaining = roundDuration
         isNewRecord = false
+        endedOutOfLives = false
         currentLevel = .L1
         cards = (0..<Level.L1.gridCount).map { Card(id: $0) }
         cardFlashes.removeAll()
         litTokens.removeAll()
         floatingScores.removeAll()
+        levelUpDismissWorkItem?.cancel()
+        levelUpBannerText = nil
 
         phase = .playing
         roundTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -239,7 +298,22 @@ struct LightItUpView: View {
         }
         litTimer = Timer.publish(every: newLevel.litWindow, on: .main, in: .common).autoconnect()
         HapticManager.shared.tap(combo: 3)
-        spawnFloatingScore(text: "\(newLevel.badgeTitle)!", color: newLevel.accentColor, isPositive: true)
+        showLevelUpFlash(level: newLevel)
+    }
+
+    private func showLevelUpFlash(level: Level) {
+        levelUpDismissWorkItem?.cancel()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+            levelUpBannerText = "Level \(level.rawValue)!"
+        }
+
+        let workItem = DispatchWorkItem {
+            withAnimation(.easeOut(duration: 0.22)) {
+                levelUpBannerText = nil
+            }
+        }
+        levelUpDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.95, execute: workItem)
     }
 
     private func lightUpRandomCards() {
@@ -290,24 +364,23 @@ struct LightItUpView: View {
             HapticManager.shared.tap(combo: min(4, max(1, streak / 3 + 1)))
             spawnFloatingScore(text: "+2", color: .green, isPositive: true)
         } else {
-            misses += 1
+            wrongTaps += 1
             streak = 0
-            score = max(0, score - 1)
+            lives = max(0, lives - 1)
 
             triggerFlash(cardID: card.id, flash: .wrong)
             HapticManager.shared.hazardPenalty()
-            spawnFloatingScore(text: "-1", color: .red, isPositive: false)
+            spawnFloatingScore(text: "-1 LIFE", color: .red, isPositive: false)
+
+            if lives == 0 {
+                endGame(outOfLives: true)
+            }
         }
     }
 
     private func handleMissedWindow(cardID: Int) {
-        misses += 1
         streak = 0
-        score = max(0, score - 1)
-
         triggerFlash(cardID: cardID, flash: .wrong)
-        HapticManager.shared.hazardPenalty()
-        spawnFloatingScore(text: "-1 MISS", color: .red, isPositive: false)
     }
 
     private func triggerFlash(cardID: Int, flash: CardFlash) {
@@ -358,6 +431,8 @@ struct LightItUpView: View {
 
     private func stopActiveRound() {
         litTokens.removeAll()
+        levelUpDismissWorkItem?.cancel()
+        levelUpBannerText = nil
         for idx in cards.indices {
             cards[idx].isLit = false
         }
@@ -366,9 +441,12 @@ struct LightItUpView: View {
         }
     }
 
-    private func endGame() {
+    private func endGame(outOfLives: Bool) {
         phase = .over
+        endedOutOfLives = outOfLives
         litTokens.removeAll()
+        levelUpDismissWorkItem?.cancel()
+        levelUpBannerText = nil
         for idx in cards.indices {
             cards[idx].isLit = false
         }
@@ -386,15 +464,19 @@ struct LightItUpView: View {
     private func resetToIdle() {
         score = 0
         hits = 0
-        misses = 0
+        wrongTaps = 0
         streak = 0
+        lives = maxLives
         timeRemaining = roundDuration
         isNewRecord = false
+        endedOutOfLives = false
         currentLevel = .L1
         cards = (0..<Level.L1.gridCount).map { Card(id: $0) }
         cardFlashes.removeAll()
         litTokens.removeAll()
         floatingScores.removeAll()
+        levelUpDismissWorkItem?.cancel()
+        levelUpBannerText = nil
         phase = .idle
     }
 }

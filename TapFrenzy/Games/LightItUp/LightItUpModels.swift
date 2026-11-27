@@ -60,17 +60,32 @@ enum Level: Int, CaseIterable, Equatable {
     var accentColor: Color {
         switch self {
         case .L1: return .cyan
-        case .L2: return .green
+        case .L2: return .yellow
         case .L3: return .orange
         case .L4: return .pink
         }
     }
 
-    static func forElapsed(_ elapsedSeconds: Int) -> Level {
-        switch elapsedSeconds {
-        case ..<15: return .L1
-        case 15..<30: return .L2
-        case 30..<45: return .L3
+    var litGradientColors: [Color] {
+        switch self {
+        case .L1:
+            return [Color(red: 0.35, green: 0.92, blue: 1.0), Color(red: 0.0, green: 0.56, blue: 0.98)]
+        case .L2:
+            return [Color(red: 1.0, green: 0.92, blue: 0.25), Color(red: 1.0, green: 0.56, blue: 0.0)]
+        case .L3:
+            return [Color(red: 1.0, green: 0.58, blue: 0.2), Color(red: 0.94, green: 0.24, blue: 0.06)]
+        case .L4:
+            return [Color(red: 1.0, green: 0.35, blue: 0.85), Color(red: 0.68, green: 0.12, blue: 0.92)]
+        }
+    }
+
+    static func forElapsed(_ elapsedSeconds: Int, totalDuration: Int = 60) -> Level {
+        let safeTotal = max(1, totalDuration)
+        let progress = Double(elapsedSeconds) / Double(safeTotal)
+        switch progress {
+        case ..<0.25: return .L1
+        case 0.25..<0.50: return .L2
+        case 0.50..<0.75: return .L3
         default: return .L4
         }
     }

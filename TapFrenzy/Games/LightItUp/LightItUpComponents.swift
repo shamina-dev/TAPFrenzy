@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - 1. Individual Grid Card View
 struct LightUpCardView: View {
     let card: Card
+    let level: Level
     let flash: CardFlash?
     let height: CGFloat
     let isInteractive: Bool
@@ -28,10 +29,7 @@ struct LightUpCardView: View {
 
         if card.isLit {
             return LinearGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.92, blue: 0.25),
-                    Color(red: 1.0, green: 0.52, blue: 0.0)
-                ],
+                colors: level.litGradientColors,
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -51,14 +49,14 @@ struct LightUpCardView: View {
         if let flash {
             return flash == .correct ? .green : .red
         }
-        return card.isLit ? .yellow : Color(red: 0.26, green: 0.28, blue: 0.45)
+        return card.isLit ? level.accentColor : Color(red: 0.26, green: 0.28, blue: 0.45)
     }
 
     private var shadowColor: Color {
         if let flash {
             return (flash == .correct ? Color.green : Color.red).opacity(0.65)
         }
-        return card.isLit ? Color.orange.opacity(0.75) : .clear
+        return card.isLit ? level.accentColor.opacity(0.85) : .clear
     }
 
     var body: some View {
@@ -85,12 +83,14 @@ struct LightItUpGameOverModalView: View {
     let highScore: Int
     let isNewRecord: Bool
     let hits: Int
-    let misses: Int
+    let wrongTaps: Int
+    let livesRemaining: Int
+    let endedOutOfLives: Bool
     let levelReached: Level
     let onPlayAgain: () -> Void
 
     private var accuracyText: String {
-        let totalAttempts = hits + misses
+        let totalAttempts = hits + wrongTaps
         guard totalAttempts > 0 else { return "0%" }
         let pct = Int((Double(hits) / Double(totalAttempts)) * 100.0)
         return "\(pct)%"
@@ -126,9 +126,9 @@ struct LightItUpGameOverModalView: View {
                             .foregroundColor(.yellow)
                             .shadow(color: Color.yellow.opacity(0.5), radius: 6, x: 0, y: 2)
                     } else {
-                        Text("ROUND COMPLETE")
+                        Text(endedOutOfLives ? "OUT OF LIVES" : "ROUND COMPLETE")
                             .font(.system(size: 24, weight: .heavy, design: .rounded))
-                            .foregroundColor(.white)
+                            .foregroundColor(endedOutOfLives ? .red : .white)
                     }
                 }
                 .padding(.top, 8)
@@ -167,7 +167,7 @@ struct LightItUpGameOverModalView: View {
 
                 HStack(spacing: 12) {
                     StatCard(title: "CARDS HIT", value: "\(hits)", icon: "checkmark.circle.fill", color: .cyan)
-                    StatCard(title: "MISS / WRONG", value: "\(misses)", icon: "xmark.circle.fill", color: .red)
+                    StatCard(title: "LIVES LEFT", value: "\(livesRemaining)/3", icon: "heart.fill", color: .red)
                 }
 
                 Button(action: onPlayAgain) {
