@@ -14,7 +14,7 @@ struct HomeView: View {
                     Spacer()
 
                     // App Title
-                    Text("TAP FRENZY")
+                    Text("MY GAMES")
                         .font(.system(size: 40, weight: .black, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
